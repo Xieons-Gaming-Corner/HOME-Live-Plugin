@@ -9,7 +9,7 @@ public static class SaveFileHandler
         var res = pkm.ConvertToType(sav.PKMType, conversionType);
         if (res is not null)
         {
-            sav.AdaptPKM(res);
+            sav.AdaptToSaveFile(res, false);
             view.PopulateFieldsSafe(fixLegality ? res.FixLegality() : res);
             return true;
         }
@@ -18,9 +18,8 @@ public static class SaveFileHandler
 
     public static void SetPokeList(this SaveFile sav, List<HomeWrapper?> pks, ConversionType conversionType, bool fixLegality)
     {
-        var version = sav.GetGameVersion();
-        var numBox = version.GetBoxCount();
-        var numSlot = version.GetSlotCount();
+        var numBox = sav.BoxCount;
+        var numSlot = sav.BoxSlotCount;
 
         var convertedList = pks.ConvertListToType(sav.PKMType, conversionType);
         if (convertedList.Count > 0) sav.ClearBoxes();
@@ -30,7 +29,7 @@ public static class SaveFileHandler
             if (i > (numBox * numSlot)) break;
             if (entity is not null)
             {
-                sav.AdaptPKM(entity);
+                sav.AdaptToSaveFile(entity, false);
                 sav.SetBoxSlotAtIndex(fixLegality ? entity.FixLegality() : entity, i / numSlot, i % numSlot);
             }
         }

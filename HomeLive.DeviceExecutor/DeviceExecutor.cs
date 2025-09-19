@@ -1,5 +1,5 @@
 ﻿using SysBot.Base;
-using System.Text;
+using System.Globalization;
 
 namespace HomeLive.DeviceExecutor;
 
@@ -19,6 +19,7 @@ public class DeviceState : BotState<RoutineType, SwitchConnectionConfig>
 
 public class DeviceExecutor<T>(DeviceState cfg) : SwitchRoutineExecutor<T>(cfg) where T : DeviceState
 {
+    private const decimal BotbaseVersion = 2.4m;
     private static ulong BoxStartAddress = 0;
 
     public override string GetSummary()
@@ -37,9 +38,11 @@ public class DeviceExecutor<T>(DeviceState cfg) : SwitchRoutineExecutor<T>(cfg) 
     {
         try
         {
-            (var title, var build) = await IsRunningHome(token).ConfigureAwait(false);
+            var botbase = await VerifyBotbaseVersion(token).ConfigureAwait(false);
+            Log($"Valid botbase version: {botbase}");
+            (var title, var version) = await IsRunningHome(token).ConfigureAwait(false);
             Log($"Valid Title ID ({title})");
-            Log($"Valid Build ID ({build})");
+            Log($"Valid Home Version ({version})");
             Log("Connection Test OK.");
 
             if (Config.Connection.Protocol is SwitchProtocol.WiFi)
@@ -71,33 +74,46 @@ public class DeviceExecutor<T>(DeviceState cfg) : SwitchRoutineExecutor<T>(cfg) 
 
     private async Task<(string, string)> IsRunningHome(CancellationToken token)
     {
-        if (!Connection.Connected)
+        if (Config.Connection.Protocol is SwitchProtocol.WiFi && !Connection.Connected)
             throw new InvalidOperationException("No remote connection");
 
         var title = await SwitchConnection.GetTitleID(token).ConfigureAwait(false);
-        var build = await GetBuildID(token).ConfigureAwait(false);
-        if (title.Equals(HomeDataOffsets.HomeTitleID) && build.Equals(HomeDataOffsets.HomeBuildID))
-            return (title, build);
+        var version = await SwitchConnection.GetGameInfo("version", token).ConfigureAwait(false);
+        if (title.Equals(HomeDataOffsets.HomeTitleID) && version.Equals(HomeDataOffsets.HomeSupportedVersion))
+            return (title, version);
         else if (!title.Equals(HomeDataOffsets.HomeTitleID)) 
             throw new InvalidOperationException($"Invalid Title ID: {title}. The Pokémon HOME application is not running.");
         else 
-            throw new InvalidOperationException($"Invalid Build ID: {build}. The Pokémon HOME application is on a non-supported version.");
+            throw new InvalidOperationException($"Invalid Home Version: {version}. The Pokémon HOME application is on a non-supported version.");
     }
 
-    private async Task<string> GetBuildID(CancellationToken token)
+    //Thanks Anubis
+    //https://github.com/kwsch/SysBot.NET/blob/b26c8c957364efe316573bec4b82e8c5c5a1a60f/SysBot.Pokemon/Actions/PokeRoutineExecutor.cs#L88
+    //AGPL v3 License
+    public async Task<string> VerifyBotbaseVersion(CancellationToken token)
     {
-        if (!Connection.Connected)
+        if (Config.Connection.Protocol is SwitchProtocol.WiFi && !Connection.Connected)
             throw new InvalidOperationException("No remote connection");
 
-        var cmd = SwitchCommand.GetBuildID(Config.Connection.Protocol is SwitchProtocol.WiFi);
-        var bytes = await SwitchConnection.ReadRaw(cmd, 17, token).ConfigureAwait(false);
-        var str = Encoding.ASCII.GetString(bytes).Trim().ToUpper();
-        return str;
+        var data = await SwitchConnection.GetBotbaseVersion(token).ConfigureAwait(false);
+        var version = decimal.TryParse(data, CultureInfo.InvariantCulture, out var v) ? v : 0;
+        if (version < BotbaseVersion)
+        {
+            var protocol = Config.Connection.Protocol;
+            var msg = protocol is SwitchProtocol.WiFi ? "sys-botbase" : "usb-botbase";
+            msg += $" version is not supported. Expected version {BotbaseVersion} or greater, and current version is {version}. Please download the latest version from: ";
+            if (protocol is SwitchProtocol.WiFi)
+                msg += "https://github.com/olliz0r/sys-botbase/releases/latest";
+            else
+                msg += "https://github.com/Koi-3088/usb-botbase/releases/latest";
+            throw new Exception(msg);
+        }
+        return data;
     }
 
     public async Task<ulong> GetBoxStartOffset(CancellationToken token)
     {
-        if (!Connection.Connected)
+        if (Config.Connection.Protocol is SwitchProtocol.WiFi && !Connection.Connected)
             throw new InvalidOperationException("No remote connection");
 
         if (BoxStartAddress == 0)
@@ -108,7 +124,7 @@ public class DeviceExecutor<T>(DeviceState cfg) : SwitchRoutineExecutor<T>(cfg) 
 
     public async Task<byte[]> ReadBoxData(int box, CancellationToken token)
     {
-        if (!Connection.Connected)
+        if (Config.Connection.Protocol is SwitchProtocol.WiFi && !Connection.Connected)
             throw new InvalidOperationException("No remote connection");
 
         Log("Getting Box offset...");
@@ -123,7 +139,7 @@ public class DeviceExecutor<T>(DeviceState cfg) : SwitchRoutineExecutor<T>(cfg) 
 
     public async Task<byte[]> ReadSlotData(int box, int slot, CancellationToken token)
     {
-        if (!Connection.Connected)
+        if (Config.Connection.Protocol is SwitchProtocol.WiFi && !Connection.Connected)
             throw new InvalidOperationException("No remote connection");
 
         Log("Getting Slot offset...");
@@ -137,7 +153,7 @@ public class DeviceExecutor<T>(DeviceState cfg) : SwitchRoutineExecutor<T>(cfg) 
 
     public async Task<byte[]> ReadRange((int box, int slot) start, (int box, int slot) end, CancellationToken token)
     {
-        if (!Connection.Connected)
+        if (Config.Connection.Protocol is SwitchProtocol.WiFi && !Connection.Connected)
             throw new InvalidOperationException("No remote connection");
 
         Log($"Reading from Box {start.box}, Slot {start.slot} to Box {end.box}, Slot {end.slot}...");
