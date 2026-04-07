@@ -172,6 +172,18 @@ public class HomeWrapper
         _ => EntityConverter.ConvertToType(PKM!, typeof(PA9), out _) as PA9,
     };
 
+    public bool HasPC9() => PKM switch
+    {
+        PKH pkh => pkh.DataPC9 is not null,
+        _ => false
+    };
+
+    public PKM? ConvertToPC9() => PKM switch
+    {
+        PKH pkh => pkh.ConvertToPKM(HomeGameDataFormat.PC9),
+        _ => throw new NotSupportedException("No conversion routine.")
+    };
+
     //Assumes PKM is a HOME format, and destType is a pre-Switch era format
     public PKM? BackwardTransfer(Type destType, out EntityConverterResult result)
     {
@@ -190,6 +202,8 @@ public class HomeWrapper
             pk = ConvertToPK9();
         else if (HasPA9())
             pk = ConvertToPA9();
+        else if (HasPC9())
+            pk = ConvertToPC9();
 
         if (pk is not null)
             pk = EntityConverter.ConvertToType(pk, destType, out result);
