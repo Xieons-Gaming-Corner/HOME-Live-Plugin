@@ -1,8 +1,9 @@
-/* Legacy code for PKH Data Version 2.
- * https://github.com/kwsch/PKHeX/blob/75ec6ca38dcd9ac50e781434e390c14d671ebae1/PKHeX.Core/PKM/HOME/GameDataPA8.cs
+﻿/* Legacy code for PKH Data Version 2.
+ * https://github.com/kwsch/PKHeX/blob/e41797d0cbec195577a993e97e79e979c2e97ce3/PKHeX.Core/PKM/HOME/GameDataPA8.cs
  * GPL v3 License
  * I claim no ownership of this code. Thanks to all the PKHeX contributors.*/
 
+using System;
 using PKHeX.Core;
 using static System.Buffers.Binary.BinaryPrimitives;
 
@@ -11,15 +12,15 @@ namespace HomeLive.Core.Legacy;
 /// <summary>
 /// Side game data for <see cref="PA8"/> data transferred into HOME.
 /// </summary>
-public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSizeAbsolute, IScaledSize3, IGameDataSplitAbility, IPokerusStatus
+public sealed class GameData3PA8 : HomeOptional3, IGameDataSide3<PA8>, IScaledSizeAbsolute, IScaledSize3, IGameDataSplitAbility, IPokerusStatus, IAlpha
 {
     private const HomeGameDataFormat ExpectFormat = HomeGameDataFormat.PA8;
-    private const int SIZE = 0x40;
+    private const int SIZE = HomeCrypto.SIZE_2GAME_PA8;
     protected override HomeGameDataFormat Format => ExpectFormat;
 
-    public GameData2PA8() : base(SIZE) { }
-    public GameData2PA8(Memory<byte> data) : base(data) => EnsureSize(SIZE);
-    public GameData2PA8 Clone() => new(ToArray());
+    public GameData3PA8() : base(SIZE) { }
+    public GameData3PA8(Memory<byte> data) : base(data) => EnsureSize(SIZE);
+    public GameData3PA8 Clone() => new(ToArray());
     public int WriteTo(Span<byte> result) => WriteWithHeader(result);
 
     #region Structure
@@ -42,7 +43,7 @@ public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSi
     public ushort RelearnMove2 { get => ReadUInt16LittleEndian(Data[0x13..]); set => WriteUInt16LittleEndian(Data[0x13..], value); }
     public ushort RelearnMove3 { get => ReadUInt16LittleEndian(Data[0x15..]); set => WriteUInt16LittleEndian(Data[0x15..], value); }
     public ushort RelearnMove4 { get => ReadUInt16LittleEndian(Data[0x17..]); set => WriteUInt16LittleEndian(Data[0x17..], value); }
-    public byte GV_HP  { get => Data[0x19]; set => Data[0x19] = value; }
+    public byte GV_HP { get => Data[0x19]; set => Data[0x19] = value; }
     public byte GV_ATK { get => Data[0x1A]; set => Data[0x1A] = value; }
     public byte GV_DEF { get => Data[0x1B]; set => Data[0x1B] = value; }
     public byte GV_SPE { get => Data[0x1C]; set => Data[0x1C] = value; }
@@ -55,13 +56,13 @@ public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSi
     private Span<byte> PurchasedRecord => Data.Slice(0x28, 8);
     public bool GetPurchasedRecordFlag(int index) => FlagUtil.GetFlag(PurchasedRecord, index >> 3, index & 7);
     public void SetPurchasedRecordFlag(int index, bool value) => FlagUtil.SetFlag(PurchasedRecord, index >> 3, index & 7, value);
-    public bool GetPurchasedRecordFlagAny() => PurchasedRecord.IndexOfAnyExcept<byte>(0) >= 0;
+    public bool GetPurchasedRecordFlagAny() => PurchasedRecord.ContainsAnyExcept<byte>(0);
     public int GetPurchasedCount() => System.Numerics.BitOperations.PopCount(ReadUInt64LittleEndian(PurchasedRecord));
 
     private Span<byte> MasteredRecord => Data.Slice(0x30, 8);
     public bool GetMasteredRecordFlag(int index) => FlagUtil.GetFlag(MasteredRecord, index >> 3, index & 7);
     public void SetMasteredRecordFlag(int index, bool value) => FlagUtil.SetFlag(MasteredRecord, index >> 3, index & 7, value);
-    public bool GetMasteredRecordFlagAny() => MasteredRecord.IndexOfAnyExcept<byte>(0) >= 0;
+    public bool GetMasteredRecordFlagAny() => MasteredRecord.ContainsAnyExcept<byte>(0);
 
     public ushort EggLocation { get => ReadUInt16LittleEndian(Data[0x38..]); set => WriteUInt16LittleEndian(Data[0x38..], value); }
     public ushort MetLocation { get => ReadUInt16LittleEndian(Data[0x3A..]); set => WriteUInt16LittleEndian(Data[0x3A..], value); }
@@ -81,7 +82,7 @@ public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSi
 
     #region Conversion
 
-    public void CopyTo(PA8 pk, PH2 pkh)
+    public void CopyTo(PA8 pk, PH3 pkh)
     {
         this.CopyTo(pk);
         pk.IsAlpha = IsAlpha;
@@ -103,13 +104,13 @@ public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSi
         pk.Ability = Ability;
     }
 
-    public void CopyFrom(PA8 pk, PH2 pkh)
+    public void CopyFrom(PA8 pk, PH3 pkh)
     {
         this.CopyFrom(pk);
         IsAlpha = pk.IsAlpha;
         IsNoble = pk.IsNoble;
         AlphaMove = pk.AlphaMove;
-        pkh.HeightScalar = Scale = pk.Scale; // Overwrite Height
+        pkh.HeightScalar = Scale = pk.IsAlpha ? byte.MaxValue : pk.Scale; // Overwrite Height -- fix error in Alpha static encounters w/ 127-scale (3.0.1+)
         HeightAbsolute = pk.CalcHeightAbsolute; // Ignore the stored value, be nice and recalculate for the user.
         WeightAbsolute = pk.CalcHeightAbsolute; // Ignore the stored value, be nice and recalculate for the user.
         GV_HP = pk.GV_HP;
@@ -129,7 +130,7 @@ public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSi
             pkh.Core.RibbonMarkAlpha = true;
     }
 
-    public PA8 ConvertToPKM(PH2 pkh)
+    public PA8 ConvertToPKM(PH3 pkh)
     {
         var pk = new PA8();
         pkh.CopyTo(pk);
@@ -143,40 +144,40 @@ public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSi
     #endregion
 
     /// <summary> Reconstructive logic to best apply suggested values. </summary>
-    public static GameData2PA8? TryCreate(PH2 pkh)
+    public static GameData3PA8? TryCreate(PH3 pkh)
     {
         if (!PersonalTable.LA.IsPresentInGame(pkh.Species, pkh.Form))
             return null;
 
         var result = CreateInternal(pkh);
-        if (result == null)
+        if (result is null)
             return null;
 
         result.PopulateFromCore(pkh);
         return result;
     }
 
-    private static GameData2PA8? CreateInternal(PH2 pkh)
+    private static GameData3PA8? CreateInternal(PH3 pkh)
     {
         var side = GetNearestNeighbor(pkh);
-        if (side == null)
+        if (side is null)
             return null;
 
-        var result = new GameData2PA8();
+        var result = new GameData3PA8();
         result.InitializeFrom(side, pkh);
         return result;
     }
 
-    private static IGameDataSide2? GetNearestNeighbor(PH2 pkh) => pkh.DataPK9 as IGameDataSide2
-                                                              ?? pkh.DataPB8 as IGameDataSide2
-                                                              ?? pkh.DataPK8 as IGameDataSide2
+    private static IGameDataSide3? GetNearestNeighbor(PH3 pkh) => pkh.DataPK9 as IGameDataSide3
+                                                              ?? pkh.DataPB8 as IGameDataSide3
+                                                              ?? pkh.DataPK8 as IGameDataSide3
                                                               ?? pkh.DataPB7;
 
-    public void InitializeFrom(IGameDataSide2 side, PH2 pkh)
+    public void InitializeFrom(IGameDataSide3 side, PH3 pkh)
     {
         Ball = GetLegendBall(side.Ball, pkh.LA);
-        MetLocation = side.MetLocation == Locations.Default8bNone ? (ushort)0 : side.MetLocation;
-        EggLocation = side.EggLocation == Locations.Default8bNone ? (ushort)0 : side.EggLocation;
+        MetLocation = side.MetLocation != Locations.Default8bNone ? side.MetLocation : (ushort)0;
+        EggLocation = side.EggLocation != Locations.Default8bNone ? side.EggLocation : (ushort)0;
 
         if (side is IScaledSize3 s3)
             Scale = s3.Scale;
@@ -201,12 +202,15 @@ public sealed class GameData2PA8 : HomeOptional2, IGameDataSide2<PA8>, IScaledSi
         return (byte)PKHeX.Core.Ball.LAPoke;
     }
 
-    private void PopulateFromCore(PH2 pkh)
+    private void PopulateFromCore(PH3 pkh)
     {
         var pi = PersonalTable.LA.GetFormEntry(pkh.Species, pkh.Form);
         HeightAbsolute = PA8.GetHeightAbsolute(pi, pkh.HeightScalar);
         WeightAbsolute = PA8.GetWeightAbsolute(pi, pkh.HeightScalar, pkh.WeightScalar);
-        Ability = (ushort)pi.GetAbilityAtIndex(AbilityNumber >> 1);
+        var index = AbilityNumber >> 1;
+        if (index >= pi.AbilityCount)
+            index = 0;
+        Ability = (ushort)pi.GetAbilityAtIndex(index);
 
         var level = Experience.GetLevel(pkh.EXP, pi.EXPGrowth);
         this.ResetMoves(pkh.Species, pkh.Form, level, LearnSource8LA.Instance, EntityContext.Gen8a);

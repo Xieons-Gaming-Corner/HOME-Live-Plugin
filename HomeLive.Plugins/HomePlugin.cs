@@ -5,7 +5,7 @@ namespace HomeLive.Plugins;
 
 public class HomePlugin : IPlugin
 {
-    public const string Version = "3.3.0";
+    public const string Version = "4.0.0";
     public string Name => nameof(HomePlugin);
     public int Priority => 1;
 
@@ -76,7 +76,7 @@ public class HomePlugin : IPlugin
     {
         Language = GameInfo.CurrentLanguage;
         TranslatePlugins();
-        if (SaveFileEditor.SAV is SAV7b or SAV8SWSH or SAV8BS or SAV8LA or SAV9SV)
+        if (SaveFileEditor.SAV is SAV7b or SAV8SWSH or SAV8BS or SAV8LA or SAV9SV or SAV9ZA)
             Viewer.Enabled = true;
         else
             Viewer.Enabled = false;
